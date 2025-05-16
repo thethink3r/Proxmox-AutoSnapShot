@@ -1,26 +1,29 @@
+
 # Proxmox-AutoSnapShot
 
-## User & Gruppe mit Berechtigung anlegen
+## Create User & Group with Permissions
 
-Es muss im Proxmox ein User mit den Berechtigung auf VM.Audit & VM.Snapshot angelegt werden.
-Ich habe dafür eine Extra Rolle `Snapshot` angelegt die die beiden Rollen zugewiesen bekommen hat.
+You need to create a user in Proxmox with permissions for `VM.Audit` and `VM.Snapshot`.
 
-Dann habe ich eine Gruppe `Snapshot` angelegt und der Gruppe dann `/vms` die Rolle `Snapshot` zugewiesen.
+Create a custom role named `Snapshot` that includes these two privileges.
 
-## API Zugriff erstellen
+Then, create a group named `Snapshot` and assign the `Snapshot` role to the group on the `/vms` path.
 
-Dann habe ich ein API Token für den User `snapshot@pve` mit dem Namen `AutoSnap` angelegt.
+## Create API Token
 
-Im Code muss der User mit Tokenname angegeben werden. In diesem Beispiel muss in der Variable `API_Token_ID` der Wert `snapshot@pve!AutoSnap` und den Secret muss in der Variable `API_Token_Secret` angegeben werden. (ACHTUNG Secret wird bei Proxmox nur einmal angezeigt)
+Create an API token for the user `snapshot@pve` with the name `AutoSnap`.
 
-## Aufruf mittels Systemd Timer
+In the script, configure the following variables:
+- `API_Token_ID` should be `snapshot@pve!AutoSnap`
+- `API_Token_Secret` should be the token secret (⚠️ shown only once when the token is created in Proxmox)
 
-Im Ordner systemd sind Beispiel Timer & Service.
-Der .service wird dann immer entsprechend von dem .timer aufgerufen.
+## Run via systemd Timer
 
-Um dies zu aktivieren:
+Example `.service` and `.timer` units are provided in the `systemd` folder.
 
-```
+To enable the systemd timers:
+
+```bash
 ln -s /opt/autosnap/systemd/autosnap.service /etc/systemd/system/autosnap.service
 ln -s /opt/autosnap/systemd/autosnap.timer /etc/systemd/system/autosnap.timer
 ln -s /opt/autosnap/systemd/cleanup.service /etc/systemd/system/cleanup.service
@@ -30,36 +33,56 @@ systemctl daemon-reload
 systemctl enable --now autosnap.timer
 systemctl enable --now cleanup.timer
 ```
-In diesem Beispeil ist es so aufgebaut das Montag - Freitag von 06:00-18:00 Uhr alle 15 Minuten ein Snapshot ausgelöst wird.
-Der Clean läuft Täglich um 05:00 Uhr morgens.
 
-## Funktionsbeschreibung 
-Das Script erstellt Snapshots von laufenden VMs auf Proxmox-Servern.
-Es wird ein Snapshot-Name im Format autosnap-YYYYMMDDHHMM erstellt.
-Das Script überprüft, ob ein Snapshot bereits existiert, und löscht alte Snapshots basierend auf einem festgelegten Zeitintervall.
-Snapshots werden alle 15 Minuten erstellt, wobei nur die letzten 2 Stunden und stündliche Snapshots der letzten 24 Stunden behalten werden.
-Das Script kann mit dem Parameter -clean aufgerufen werden, um alte Snapshots zu löschen, ohne neue Snapshots zu erstellen.
-Es wird auch überprüft, ob die VM gelockt ist, bevor ein Snapshot erstellt oder gelöscht wird.
+In this example, snapshots are taken every 15 minutes from Monday to Friday between 06:00 and 18:00.  
+Cleanup runs daily at 05:00 in the morning.
 
-## Parameter
-### Ohne Parameter
-Wird `/opt/autosnap/autosnap.sh` so aufgerufen, wird ein Snapshot erstellt. Das Script ist so aufgebaut, dass immer der Zeitstempel auf 15min abgerundet wird und als Snapshotname verwendet wird.
+## Function Description
 
-Beispiel 16.05.2025 09:23 wird autosnap-202505160915 verwendet.
-Bei jeder vollen Stunde, läuft automatisch vorher ein Cleanup
+This script creates snapshots of running VMs on a Proxmox server.
 
-### Mit -clean Parameter
-Es wird nur ein Cleanup durchgeführt.
-Es werden alle Snapshots der Letzten Stunde behalten.
-Bei 1-3 Stunden alten Snapshots werden nur die zur vollen Stunde & 30 Minuten behalten.
-Alles was älter als 3 Stunden ist wird auf Stündlich reduziert.
+Snapshot names follow the format: `autosnap-YYYYMMDDHHMM`.
 
-Alle Snapshots die nicht vom aktuellen Tag sind werden gelöscht.
+The script checks if a snapshot with the current timestamp already exists and deletes old ones based on the retention policy.
 
-Grundbedingung ist, dass die Snapshots immer mit `autosnap-` beginnen. Alle anderen Snapshots werden ignoriert.
+- Snapshots are taken every 15 minutes.
+- Snapshots from the last 2 hours are all kept.
+- From 2 to 3 hours ago, only snapshots at HH:00 and HH:30 are kept.
+- Older than 3 hours: only snapshots at HH:00 are kept.
+- Snapshots not from today are deleted.
 
+The script checks if a VM is locked before creating or deleting snapshots.
+
+The script can also be run with the `-clean` parameter to only delete old snapshots without creating new ones.
+
+## Parameters
+
+### No parameter
+
+Running `/opt/autosnap/autosnap.sh` will create a snapshot.
+
+The timestamp is rounded down to the last 15-minute mark and used as the snapshot name.
+
+Example: If the current time is `16.05.2025 09:23`, the snapshot name will be `autosnap-202505160915`.
+
+Every full hour, a cleanup is performed before taking a new snapshot.
+
+### `-clean` parameter
+
+Only cleanup is performed, no new snapshots are created.
+
+Retention policy:
+- Keep all snapshots from the last hour.
+- Between 1–3 hours: keep only those taken at HH:00 and HH:30.
+- Older than 3 hours: keep only hourly snapshots.
+- Delete all snapshots not from today.
+
+Only snapshots starting with `autosnap-` are affected. All others are ignored.
 
 ## TAGS
 
-Das Script ist so aufgebaut, dass es auf ein TAG in Proxmox achten kann und das dann nur bei den VM`s mit Tag AutoSnapshot aktiviert.
-Im Default ist dies aber aus und es wird für ALLE VM´s genutzt.
+The script supports filtering by Proxmox tags.
+
+If enabled, only VMs with the defined tag (e.g., `AutoSnapshot`) will be processed.
+
+By default, tag filtering is disabled and **all** running VMs are included.
