@@ -35,7 +35,7 @@ has_tag() {
 
   if curl -s -k -H "Authorization: PVEAPIToken=${API_Token_ID}=${API_Token_Secret}" \
     "https://localhost:8006/api2/json/nodes/${NODE}/qemu/${VMID}/config" | \
-    jq -e --arg tag "$TAG" '.data.tags and (.data.tags | split(",") | index($tag))' > /dev/null; then
+    jq -e --arg tag "$TAG" '.data.tags and (.data.tags | split(";") | index($tag))' > /dev/null; then
     return 0  # Tag gefunden
   else
     return 1  # Tag nicht gefunden
