@@ -57,10 +57,37 @@ delete_snapshot() {
     local NODE=$1
     local VMID=$2
     local SNAPNAME=$3
-    curl -s -k -X DELETE \
+
+    # Snapshot löschen und Task-ID extrahieren
+    local response
+    response=$(curl -s -k -X DELETE \
         -H "Authorization: PVEAPIToken=${API_Token_ID}=${API_Token_Secret}" \
-        "https://localhost:8006/api2/json/nodes/${NODE}/qemu/${VMID}/snapshot/${SNAPNAME}" > /dev/null
-    #echo "Snapshot $SNAPNAME für VM $VMID auf Node $NODE gelöscht."
+        "https://localhost:8006/api2/json/nodes/${NODE}/qemu/${VMID}/snapshot/${SNAPNAME}")
+
+    local TASKID
+    TASKID=$(echo "$response" | jq -r '.data')
+
+    if [[ -z "$TASKID" || "$TASKID" == "null" ]]; then
+        echo "[ERROR] Snapshot $SNAPNAME (VM $VMID) konnte nicht gelöscht werden."
+        return 1
+    fi
+
+    echo "Warte auf Abschluss der Snapshot-Löschung ($SNAPNAME)..."
+
+    # Warte auf Abschluss des Tasks
+    while true; do
+        local status
+        status=$(curl -s -k \
+            -H "Authorization: PVEAPIToken=${API_Token_ID}=${API_Token_Secret}" \
+            "https://localhost:8006/api2/json/nodes/${NODE}/tasks/${TASKID}/status" | jq -r '.data.status')
+
+        if [[ "$status" == "stopped" ]]; then
+            echo "[OK] Snapshot $SNAPNAME (VM $VMID) gelöscht."
+            break
+        fi
+
+        sleep 1
+    done
 }
 
 keep_snapshot() {
