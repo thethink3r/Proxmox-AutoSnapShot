@@ -1,0 +1,6 @@
+[Unit]
+Description=Proxmox Autosnapshot
+
+[Service]
+Type=oneshot
+ExecStart=/opt/autosnap/autosnap.sh

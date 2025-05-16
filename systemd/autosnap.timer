@@ -1,0 +1,10 @@
+[Unit]
+Description=Run autosnapshot every 15 minutes (Office hours only)
+
+[Timer]
+OnCalendar=Mon..Fri 06..18:0/15:00
+Persistent=true
+Unit=autosnap.service
+
+[Install]
+WantedBy=timers.target
