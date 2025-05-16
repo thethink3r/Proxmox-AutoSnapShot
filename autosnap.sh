@@ -157,6 +157,9 @@ while read -r VMID NODE; do
 				echo "[KEEP] $SNAPSHOTNAME (VM $VMID)"
 			fi
 		done
+		if [[ "$1" != "-clean" ]]; then
+			sleep 3
+		fi
 	fi
 	
 	
